@@ -1,4 +1,5 @@
 var net = require('net');
+const udp = require('dgram');
 
 function debug() {
   console.log.apply(null, arguments);
@@ -26,7 +27,12 @@ module.exports = function(host, port, options, cb) {
   function clearTimerAndDestroySocket() {
     clearTimeout(timer);
     timer = null;
-    if (socket) socket.destroy();
+    if (socket) {
+      if(options.udp)
+        socket.close();
+      else
+        socket.destroy();
+    }
     socket = null;
   }
 
@@ -41,19 +47,34 @@ module.exports = function(host, port, options, cb) {
 
     if (--retriesRemaining < 0) return cb(new Error('out of retries'));
 
-    socket = net.createConnection(port, host, function(err) {
-      if (options.debug) debug('connected!');
-      clearTimerAndDestroySocket();
-      if (retriesRemaining > 0) cb(null);
-    });
-
-    timer = setTimeout(function() { retry(); }, retryInterval);
-
-    socket.on('error', function(err) {
-      if (options.debug) debug('error', err);
-      clearTimerAndDestroySocket();
-      setTimeout(retry, retryInterval);
-    });
+    if(options.udp){
+      socket = udp.createSocket('udp4');
+      const data = Buffer.from('#01\r');
+      client.send(data, 1025, '10.0.0.122', error => {
+        if (error) {
+            if (options.debug) debug(error);
+            client.close()
+        } else {
+          if (options.debug) debug('connected!');
+          clearTimerAndDestroySocket();
+          if (retriesRemaining > 0) cb(null);
+        }
+      });
+    } else {
+      socket = net.createConnection(port, host, function(err) {
+        if (options.debug) debug('connected!');
+        clearTimerAndDestroySocket();
+        if (retriesRemaining > 0) cb(null);
+      });
+  
+      timer = setTimeout(function() { retry(); }, retryInterval);
+  
+      socket.on('error', function(err) {
+        if (options.debug) debug('error', err);
+        clearTimerAndDestroySocket();
+        setTimeout(retry, retryInterval);
+      });
+    }
   }
 
   tryToConnect();
