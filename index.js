@@ -1,5 +1,5 @@
 var net = require('net');
-const udp = require('dgram');
+const { exec } = require('node:child_process');
 
 function debug() {
   console.log.apply(null, arguments);
@@ -28,10 +28,7 @@ module.exports = function(host, port, options, cb) {
     clearTimeout(timer);
     timer = null;
     if (socket) {
-      if(options.udp)
-        socket.close();
-      else
-        socket.destroy();
+      socket.destroy();
     }
     socket = null;
   }
@@ -48,16 +45,14 @@ module.exports = function(host, port, options, cb) {
     if (--retriesRemaining < 0) return cb(new Error('out of retries'));
 
     if(options.udp){
-      socket = udp.createSocket('udp4');
-      const data = Buffer.from('#01\r');
-      client.send(data, 1025, '10.0.0.122', error => {
-        if (error) {
-            if (options.debug) debug(error);
-            client.close()
-        } else {
-          if (options.debug) debug('connected!');
+      exec('netstat -an', (error, stdout, stderr) => {
+        if(stdout.indexOf(":" + port) > -1){
+          if (options.debug) debug('listening!');
           clearTimerAndDestroySocket();
           if (retriesRemaining > 0) cb(null);
+        } else {
+          if (options.debug) debug(error);
+          setTimeout(retry, retryInterval);
         }
       });
     } else {
