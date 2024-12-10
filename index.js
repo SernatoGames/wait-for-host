@@ -45,14 +45,25 @@ module.exports = function(host, port, options, cb) {
     if (--retriesRemaining < 0) return cb(new Error('out of retries'));
 
     if(options.udp){
-      exec('netstat -an', (error, stdout, stderr) => {
-        if(stdout.indexOf(":" + port) > -1){
+      exec('netstat -an -p udp', (error, stdout, stderr) => {
+        const regex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d{1,5}\b/gm;
+        let matches = stdout.match(regex);
+        let hasMatch = false;
+        for(let m of matches){
+          var s = m.split(':');
+          if(s[1] == port){
+            hasMatch = true;
+            break;
+          }
+        }
+
+        if(hasMatch){
           if (options.debug) debug('listening!');
           clearTimerAndDestroySocket();
           if (retriesRemaining > 0) cb(null);
         } else {
           if (options.debug) debug(error);
-          setTimeout(retry, retryInterval);
+          timer = setTimeout(function(){retry();}, retryInterval);
         }
       });
     } else {
